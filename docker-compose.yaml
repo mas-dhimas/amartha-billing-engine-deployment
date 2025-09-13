@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  postgres_db:
+    image: postgres:13-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: ${SOURCE_DATA_POSTGRESDB_NAME}
+      POSTGRES_USER: ${SOURCE_DATA_POSTGRESDB_USERNAME}
+      POSTGRES_PASSWORD: ${SOURCE_DATA_POSTGRESDB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - amartha_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SOURCE_DATA_POSTGRESDB_USERNAME} -d ${SOURCE_DATA_POSTGRESDB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend-service-migrate:
+    image: pendekaribukota/amartha-test:latest
+    environment:
+      SOURCE_DATA_POSTGRESDB_SERVER: ${SOURCE_DATA_POSTGRESDB_SERVER}
+      SOURCE_DATA_POSTGRESDB_PORT: ${SOURCE_DATA_POSTGRESDB_PORT}
+      SOURCE_DATA_POSTGRESDB_NAME: ${SOURCE_DATA_POSTGRESDB_NAME}
+      SOURCE_DATA_POSTGRESDB_USERNAME: ${SOURCE_DATA_POSTGRESDB_USERNAME}
+      SOURCE_DATA_POSTGRESDB_PASSWORD: ${SOURCE_DATA_POSTGRESDB_PASSWORD}
+      SERVICE_DATA_LOG_LEVEL: debug
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    command: ./amartha-billing-engine --migrate
+    restart: "no"
+
+  backend-service:
+    image: pendekaribukota/amartha-test:latest
+    ports:
+      - "${SERVICE_DATA_PORT}:${SERVICE_DATA_PORT}"
+    environment:
+      SERVICE_DATA_LOG_LEVEL: ${SERVICE_DATA_LOG_LEVEL}
+      SERVICE_DATA_PORT: ${SERVICE_DATA_PORT}
+      SERVICE_DATA_RATE_LIMIT: ${SERVICE_DATA_RATE_LIMIT}
+      SOURCE_DATA_POSTGRESDB_SERVER: ${SOURCE_DATA_POSTGRESDB_SERVER}
+      SOURCE_DATA_POSTGRESDB_PORT: ${SOURCE_DATA_POSTGRESDB_PORT}
+      SOURCE_DATA_POSTGRESDB_NAME: ${SOURCE_DATA_POSTGRESDB_NAME}
+      SOURCE_DATA_POSTGRESDB_USERNAME: ${SOURCE_DATA_POSTGRESDB_USERNAME}
+      SOURCE_DATA_POSTGRESDB_PASSWORD: ${SOURCE_DATA_POSTGRESDB_PASSWORD}
+      SOURCE_DATA_POSTGRESDB_TIMEOUT: ${SOURCE_DATA_POSTGRESDB_TIMEOUT}
+      SOURCE_DATA_POSTGRESDB_MAX_CONNS: ${SOURCE_DATA_POSTGRESDB_MAX_CONNS}
+      SOURCE_DATA_POSTGRESDB_MIN_CONNS: ${SOURCE_DATA_POSTGRESDB_MIN_CONNS}
+      SOURCE_DATA_POSTGRESDB_MAX_CONN_LIFETIME: ${SOURCE_DATA_POSTGRESDB_MAX_CONN_LIFETIME} #seconds
+      SOURCE_DATA_POSTGRESDB_MAX_CONN_IDLE_TIME: ${SOURCE_DATA_POSTGRESDB_MAX_CONN_IDLE_TIME} #seconds
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    command: ./amartha-billing-engine
+
+volumes:
+  amartha_postgres_data:
